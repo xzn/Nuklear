@@ -6073,9 +6073,9 @@ NK_LIB void nk_draw_button_symbol(struct nk_command_buffer *out, const struct nk
 NK_LIB nk_bool nk_do_button_symbol(nk_flags *state, struct nk_command_buffer *out, struct nk_rect bounds, enum nk_symbol_type symbol, enum nk_button_behavior behavior, const struct nk_style_button *style, const struct nk_input *in, const struct nk_user_font *font);
 NK_LIB void nk_draw_button_image(struct nk_command_buffer *out, const struct nk_rect *bounds, const struct nk_rect *content, nk_flags state, const struct nk_style_button *style, const struct nk_image *img);
 NK_LIB nk_bool nk_do_button_image(nk_flags *state, struct nk_command_buffer *out, struct nk_rect bounds, struct nk_image img, enum nk_button_behavior b, const struct nk_style_button *style, const struct nk_input *in);
-NK_LIB void nk_draw_button_text_symbol(struct nk_command_buffer *out, const struct nk_rect *bounds, const struct nk_rect *label, const struct nk_rect *symbol, nk_flags state, const struct nk_style_button *style, const char *str, int len, enum nk_symbol_type type, const struct nk_user_font *font);
+NK_LIB void nk_draw_button_text_symbol(struct nk_command_buffer *out, const struct nk_rect *bounds, const struct nk_rect *label, const struct nk_rect *symbol, nk_flags state, const struct nk_style_button *style, const char *str, int len, enum nk_symbol_type type, const struct nk_user_font *font, nk_flags align);
 NK_LIB nk_bool nk_do_button_text_symbol(nk_flags *state, struct nk_command_buffer *out, struct nk_rect bounds, enum nk_symbol_type symbol, const char *str, int len, nk_flags align, enum nk_button_behavior behavior, const struct nk_style_button *style, const struct nk_user_font *font, const struct nk_input *in);
-NK_LIB void nk_draw_button_text_image(struct nk_command_buffer *out, const struct nk_rect *bounds, const struct nk_rect *label, const struct nk_rect *image, nk_flags state, const struct nk_style_button *style, const char *str, int len, const struct nk_user_font *font, const struct nk_image *img);
+NK_LIB void nk_draw_button_text_image(struct nk_command_buffer *out, const struct nk_rect *bounds, const struct nk_rect *label, const struct nk_rect *image, nk_flags state, const struct nk_style_button *style, const char *str, int len, const struct nk_user_font *font, const struct nk_image *img, nk_flags align);
 NK_LIB nk_bool nk_do_button_text_image(nk_flags *state, struct nk_command_buffer *out, struct nk_rect bounds, struct nk_image img, const char* str, int len, nk_flags align, enum nk_button_behavior behavior, const struct nk_style_button *style, const struct nk_user_font *font, const struct nk_input *in);
 
 /* toggle */
@@ -23965,8 +23965,7 @@ nk_widget_text(struct nk_command_buffer *o, struct nk_rect b,
         label.w = NK_MAX(1, 2 * t->padding.x + (float)text_width);
         label.x = (b.x + t->padding.x + ((b.w - 2 * t->padding.x) - label.w) / 2);
         label.x = NK_MAX(b.x + t->padding.x, label.x);
-        label.w = NK_MIN(b.x + b.w, label.x + label.w);
-        if (label.w >= label.x) label.w -= label.x;
+        label.w = NK_MIN(b.w, label.w);
     } else if (a & NK_TEXT_ALIGN_RIGHT) {
         label.x = NK_MAX(b.x + t->padding.x, (b.x + b.w) - (2 * t->padding.x + (float)text_width));
         label.w = (float)text_width + 2 * t->padding.x;
@@ -24551,10 +24550,15 @@ nk_button_behavior(nk_flags *state, struct nk_rect r,
 #endif
         }
     }
-    if (*state & NK_WIDGET_STATE_HOVER && !nk_input_is_mouse_prev_hovering_rect(i, r))
-        *state |= NK_WIDGET_STATE_ENTERED;
-    else if (nk_input_is_mouse_prev_hovering_rect(i, r))
-        *state |= NK_WIDGET_STATE_LEFT;
+
+    if (*state & NK_WIDGET_STATE_HOVER) {
+        if (!nk_input_is_mouse_prev_hovering_rect(i, r))
+            *state |= NK_WIDGET_STATE_ENTERED;
+    } else {
+        if (nk_input_is_mouse_prev_hovering_rect(i, r))
+            *state |= NK_WIDGET_STATE_LEFT;
+    }
+
     return ret;
 }
 NK_LIB const struct nk_style_item*
@@ -24739,7 +24743,7 @@ nk_draw_button_text_symbol(struct nk_command_buffer *out,
     const struct nk_rect *bounds, const struct nk_rect *label,
     const struct nk_rect *symbol, nk_flags state, const struct nk_style_button *style,
     const char *str, int len, enum nk_symbol_type type,
-    const struct nk_user_font *font)
+    const struct nk_user_font *font, nk_flags align)
 {
     struct nk_color sym;
     struct nk_text text;
@@ -24765,7 +24769,7 @@ nk_draw_button_text_symbol(struct nk_command_buffer *out,
 
     text.padding = nk_vec2(0,0);
     nk_draw_symbol(out, type, *symbol, style->text_background, sym, 0, font);
-    nk_widget_text(out, *label, str, len, &text, NK_TEXT_CENTERED, font);
+    nk_widget_text(out, *label, str, len, &text, align, font);
 }
 NK_LIB nk_bool
 nk_do_button_text_symbol(nk_flags *state,
@@ -24795,7 +24799,7 @@ nk_do_button_text_symbol(nk_flags *state,
     /* draw button */
     if (style->draw_begin) style->draw_begin(out, style->userdata);
     nk_draw_button_text_symbol(out, &bounds, &content, &tri,
-        *state, style, str, len, symbol, font);
+        *state, style, str, len, symbol, font, align);
     if (style->draw_end) style->draw_end(out, style->userdata);
     return ret;
 }
@@ -24804,7 +24808,7 @@ nk_draw_button_text_image(struct nk_command_buffer *out,
     const struct nk_rect *bounds, const struct nk_rect *label,
     const struct nk_rect *image, nk_flags state, const struct nk_style_button *style,
     const char *str, int len, const struct nk_user_font *font,
-    const struct nk_image *img)
+    const struct nk_image *img, nk_flags align)
 {
     struct nk_text text;
     const struct nk_style_item *background;
@@ -24821,7 +24825,7 @@ nk_draw_button_text_image(struct nk_command_buffer *out,
     else text.text = style->text_normal;
 
     text.padding = nk_vec2(0,0);
-    nk_widget_text(out, *label, str, len, &text, NK_TEXT_CENTERED, font);
+    nk_widget_text(out, *label, str, len, &text, align, font);
     nk_draw_image(out, *image, img, nk_white);
 }
 NK_LIB nk_bool
@@ -24856,7 +24860,7 @@ nk_do_button_text_image(nk_flags *state,
     icon.h -= 2 * style->image_padding.y;
 
     if (style->draw_begin) style->draw_begin(out, style->userdata);
-    nk_draw_button_text_image(out, &bounds, &content, &icon, *state, style, str, len, font, &img);
+    nk_draw_button_text_image(out, &bounds, &content, &icon, *state, style, str, len, font, &img, align);
     if (style->draw_end) style->draw_end(out, style->userdata);
     return ret;
 }
@@ -25159,10 +25163,13 @@ nk_toggle_behavior(const struct nk_input *in, struct nk_rect select,
         *state = NK_WIDGET_STATE_ACTIVE;
         active = !active;
     }
-    if (*state & NK_WIDGET_STATE_HOVER && !nk_input_is_mouse_prev_hovering_rect(in, select))
-        *state |= NK_WIDGET_STATE_ENTERED;
-    else if (nk_input_is_mouse_prev_hovering_rect(in, select))
-        *state |= NK_WIDGET_STATE_LEFT;
+    if (*state & NK_WIDGET_STATE_HOVER) {
+        if (!nk_input_is_mouse_prev_hovering_rect(in, select))
+            *state |= NK_WIDGET_STATE_ENTERED;
+    } else {
+        if (nk_input_is_mouse_prev_hovering_rect(in, select))
+            *state |= NK_WIDGET_STATE_LEFT;
+    }
     return active;
 }
 NK_LIB void
@@ -25836,11 +25843,13 @@ nk_slider_behavior(nk_flags *state, struct nk_rect *logical_cursor,
     /* slider widget state */
     if (nk_input_is_mouse_hovering_rect(in, bounds))
         *state = NK_WIDGET_STATE_HOVERED;
-    if (*state & NK_WIDGET_STATE_HOVER &&
-        !nk_input_is_mouse_prev_hovering_rect(in, bounds))
-        *state |= NK_WIDGET_STATE_ENTERED;
-    else if (nk_input_is_mouse_prev_hovering_rect(in, bounds))
-        *state |= NK_WIDGET_STATE_LEFT;
+    if (*state & NK_WIDGET_STATE_HOVER) {
+        if (!nk_input_is_mouse_prev_hovering_rect(in, bounds))
+            *state |= NK_WIDGET_STATE_ENTERED;
+    } else {
+        if (nk_input_is_mouse_prev_hovering_rect(in, bounds))
+            *state |= NK_WIDGET_STATE_LEFT;
+    }
     return slider_value;
 }
 NK_LIB void
@@ -26087,10 +26096,13 @@ nk_progress_behavior(nk_flags *state, struct nk_input *in,
         }
     }
     /* set progressbar widget state */
-    if (*state & NK_WIDGET_STATE_HOVER && !nk_input_is_mouse_prev_hovering_rect(in, r))
-        *state |= NK_WIDGET_STATE_ENTERED;
-    else if (nk_input_is_mouse_prev_hovering_rect(in, r))
-        *state |= NK_WIDGET_STATE_LEFT;
+    if (*state & NK_WIDGET_STATE_HOVER) {
+        if (!nk_input_is_mouse_prev_hovering_rect(in, r))
+            *state |= NK_WIDGET_STATE_ENTERED;
+    } else {
+        if (nk_input_is_mouse_prev_hovering_rect(in, r))
+            *state |= NK_WIDGET_STATE_LEFT;
+    }
     return value;
 }
 NK_LIB void
@@ -26292,10 +26304,13 @@ nk_scrollbar_behavior(nk_flags *state, struct nk_input *in,
             if (o == NK_VERTICAL) scroll_offset = target - scroll->h;
         }
     }
-    if (*state & NK_WIDGET_STATE_HOVER && !nk_input_is_mouse_prev_hovering_rect(in, *scroll))
-        *state |= NK_WIDGET_STATE_ENTERED;
-    else if (nk_input_is_mouse_prev_hovering_rect(in, *scroll))
-        *state |= NK_WIDGET_STATE_LEFT;
+    if (*state & NK_WIDGET_STATE_HOVER) {
+        if (!nk_input_is_mouse_prev_hovering_rect(in, *scroll))
+            *state |= NK_WIDGET_STATE_ENTERED;
+    } else {
+        if (nk_input_is_mouse_prev_hovering_rect(in, *scroll))
+            *state |= NK_WIDGET_STATE_LEFT;
+    }
     return scroll_offset;
 }
 NK_LIB void
@@ -28418,10 +28433,13 @@ nk_drag_behavior(nk_flags *state, const struct nk_input *in,
         }
         *state = NK_WIDGET_STATE_ACTIVE;
     }
-    if (*state & NK_WIDGET_STATE_HOVER && !nk_input_is_mouse_prev_hovering_rect(in, drag))
-        *state |= NK_WIDGET_STATE_ENTERED;
-    else if (nk_input_is_mouse_prev_hovering_rect(in, drag))
-        *state |= NK_WIDGET_STATE_LEFT;
+    if (*state & NK_WIDGET_STATE_HOVER)  {
+        if (!nk_input_is_mouse_prev_hovering_rect(in, drag))
+            *state |= NK_WIDGET_STATE_ENTERED;
+    } else {
+        if (nk_input_is_mouse_prev_hovering_rect(in, drag))
+            *state |= NK_WIDGET_STATE_LEFT;
+    }
 }
 NK_LIB void
 nk_property_behavior(nk_flags *ws, const struct nk_input *in,
@@ -29260,10 +29278,15 @@ nk_color_picker_behavior(nk_flags *state,
     /* set color picker widget state */
     if (nk_input_is_mouse_hovering_rect(in, *bounds))
         *state = NK_WIDGET_STATE_HOVERED;
-    if (*state & NK_WIDGET_STATE_HOVER && !nk_input_is_mouse_prev_hovering_rect(in, *bounds))
-        *state |= NK_WIDGET_STATE_ENTERED;
-    else if (nk_input_is_mouse_prev_hovering_rect(in, *bounds))
-        *state |= NK_WIDGET_STATE_LEFT;
+
+    if (*state & NK_WIDGET_STATE_HOVER) {
+        if (!nk_input_is_mouse_prev_hovering_rect(in, *bounds)
+            *state |= NK_WIDGET_STATE_ENTERED;
+    } else {
+        if (nk_input_is_mouse_prev_hovering_rect(in, *bounds))
+            *state |= NK_WIDGET_STATE_LEFT;
+    }
+
     return value_changed;
 }
 NK_LIB void
